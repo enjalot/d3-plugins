@@ -1,53 +1,53 @@
 (function() {
   d3.sticker = function(selector) {
     var string;
-    var sticker = function(selector) {
-      //Serialize the selected element into a string
-      var el = d3.select(selector).node();
-      string = new XMLSerializer().serializeToString(el);
-      //check if our element is SVG
-      if(el && d3_isSVG(el)) {
+    var node;
+    var svgElement; //for deserializing svg elements
+    
+    var sticker = function(selection) {
+      return sticker.append(selection);
+    }
+    
+    sticker.copy = function(selector) {
+      node = d3.select(selector).node();
+      if(!node) return sticker;
+      //we keep track of svg element 
+      if(d3_isSVG(node)) {
         sticker.isSVG = true;
-        //this could be undefined if the el is an svg element:
-        sticker.svgElement = el.ownerSVGElement; 
+        svgElement = node.ownerSVGElement;
+      }
+      node = node.cloneNode(true);
+      node.removeAttribute("id");
+      return sticker;
+    }
+
+    sticker.paste = function() {
+      if(!node) return;
+      return node.cloneNode(true);
+    }
+    
+    sticker.node = function(_) {
+      if(!arguments.length) return node;
+      node = _;
+      if(d3_isSVG(node)) {
+        sticker.isSVG = true;
+        svgElement = node.ownerSVGElement;
       }
       return sticker;
     }
-    //use this with .select on a selection to append and select at the same time
-    sticker.node = function() {
-      var fragment;
-      if(sticker.isSVG && sticker.svgElement) {
-        fragment = d3_makeSVGFragment(string, sticker.svgElement);
-      } else {
-        fragment = d3_makeFragment(string);
-      }
-      if(!this.appendChild) return fragment;
-      return this.appendChild(fragment);
-    }
+    
     //append a copy of the sticker to the selection
     sticker.append = function(selection) {
-      if(!string) return selection;
       return selection.select(function() {
-        var fragment;
-        if(sticker.isSVG && sticker.svgElement) {
-          fragment = d3_makeSVGFragment(string, sticker.svgElement);
-        } else {
-          fragment = d3_makeFragment(string);
-        }
-        return this.appendChild(fragment);
+        return this.appendChild(sticker.paste());
       });
     }
+    
     //insert a copy of the sticker into a selection similar to the d3 insert API 
     sticker.insert = function(selection, before) {
       if(!string) return selection;
       return selection.select(before).select(function() {
-        var fragment;
-        if(sticker.isSVG && sticker.svgElement) {
-          fragment = d3_makeSVGFragment(string, sticker.svgElement);
-        } else {
-          fragment = d3_makeFragment(string);
-        }
-        return this.parentNode.insertBefore(fragment, this);
+        return this.parentNode.insertBefore(sticker.paste(), this);
       });
     }
     
@@ -56,18 +56,35 @@
       string = _;
       return sticker;
     }
+    
+    sticker.serialize = function() {
+      //Serialize the selected element into a string
+      string = new XMLSerializer().serializeToString(node);
+    }
+    sticker.deserialize = function () {
+      //check if our element is SVG
+      if(sticker.isSVG) {
+        node = d3_makeSVGFragment(string, svgElement);
+      } else {
+        node = d3_makeFragment(string);
+      }
+      return node;
+    }
+    
     sticker.toString = function() {
+      sticker.serialize();
       return string;
     }
+
     if(selector) {
-      return sticker(selector);
+      return sticker.copy(selector);
     }
     return sticker;
   }
-  
 
   function d3_isSVG(el) {
-    return !!el.ownerSVGElement || el.tagName === "svg";
+    if(!el) return false
+    return !!el.ownerSVGElement;// || el.tagName === "svg";
   }
   function d3_makeFragment(fragment) {
     var range = document.createRange()
